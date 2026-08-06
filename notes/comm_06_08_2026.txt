@@ -1,5 +1,5 @@
 Instrukce ke kompilaci a spuštění v README.md.
-Nuntno dodat že projekt byl psán na Win10. Remove-Item není linux cmd, ale cmake by měl fungovat.
+Nutno dodat že projekt byl psán na Win10. Remove-Item není linux cmd, ale cmake by měl fungovat.
 
 Úvod, který má demonstrovat o co se vlastně snažím.
 
