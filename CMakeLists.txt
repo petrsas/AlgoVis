@@ -17,16 +17,5 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(SFML)
 
-## 1. Collect your shared C++ logic into a static library
-#add_library(AlgoVisCore STATIC 
-#    src/VisualVector.cpp
-#    src/InstructionParser.cpp
-#)
-## Link SFML to the core library
-#target_link_libraries(AlgoVisCore PUBLIC SFML::Graphics)
-
 add_executable(AlgoVis src/algo_vis/main.cpp)
-target_link_libraries(AlgoVis PRIVATE SFML::Graphics) #then replace SFML::Graphics with AlgoVisCore
-
-add_executable(InstrGen src/instr_gen/main.cpp)
-target_link_libraries(InstrGen PRIVATE SFML::Graphics)
+target_link_libraries(AlgoVis PRIVATE SFML::Graphics)

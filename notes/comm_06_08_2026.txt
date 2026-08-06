@@ -1,0 +1,12 @@
+Instrukce ke kompilaci a spuštění v README.md.
+Nuntno dodat že projekt byl psán na Win10. Remove-Item není linux cmd, ale cmake by měl fungovat.
+
+Úvod, který má demonstrovat o co se vlastně snažím.
+
+VisualVector je kolekce, která se používá při psaní algoritmu k vizualizaci. Postpuně vytváří instrukce pro zobrazení. Nijak nepoužívá SFML.
+
+BarChart je jeden (momentálně jediný) způsob jakým lze VisualVector visualizovat s použitím knihovny SFML. Skládá se z pole třídy Bar a pracuje výhradně s instrukcemi generovanými VisualVector, k samotnému vektoru skrytému pod VisualVector by se neměla vůbec dostat.
+
+Dále bych chtěl, krom rozšíření kolekcí a zobrazení, přidat způsob ovládání programu skrze nějaké jednoduché menu. SFML podporuje vložení jednoho okna do druhého. A přidat možnost zobrazování v realném čase s komunikací mezi dvěmi vlákny. Jedno které generuje instrukce a hned je posílá do druhého, které podle nich upravuje zobrazení.
+
+

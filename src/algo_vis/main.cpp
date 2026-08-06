@@ -2,13 +2,11 @@
 #include "SFML/Graphics/RectangleShape.hpp"
 #include "SFML/Graphics/RenderTarget.hpp"
 #include "SFML/Graphics/RenderWindow.hpp"
-#include "SFML/Window/Window.hpp"
 #include <SFML/Graphics.hpp>
 #include <algorithm>
+#include <array>
 #include <chrono>
-#include <thread>
 #include <cstddef>
-#include <exception>
 #include <fstream>
 #include <string>
 #include <vector>
@@ -19,7 +17,7 @@
 
 #define WIDTH 1280
 #define HEIGHT 720
-#define MAIN_COLOR sf::Color::Magenta
+#define MAIN_COLOR sf::Color::Blue
 #define HIGHLIGHT_COLOR sf::Color::Red
 //#define OUTLINE_COLOR
 
@@ -57,7 +55,6 @@ public:
         return vec;
     }
 
-
     template<typename T>
     static void print_vec(const std::vector<T>& vec) {
         std::cout<<"Printing vec:"<<std::endl;
@@ -93,14 +90,10 @@ public:
 };
 
 class VisualVector {
+public:
     std::vector<int> vec;
     sf::RenderTarget& target;
-
-    //instructions
     std::vector<std::string> instrs;
-
-    //bar chart info
-    float start_x, end_x, start_y, end_y;
 
 public:
     VisualVector(sf::RenderTarget& target, std::vector<int>& vec)
@@ -115,16 +108,12 @@ public:
         this->instrs = {vec_str};
 
     }
-    std::vector<int> GetVector() const{
-        return this->vec;
-    }
     std::vector<std::string> GetInstructions() const {
         return this->instrs;
     }
     size_t Size() const{
         return this->vec.size();
     }
-    //should swap elems
     bool Swap(size_t idx_a, size_t idx_b) {
         if (idx_a >= this->vec.size() || idx_b >= this->vec.size())
             return false;
@@ -136,10 +125,10 @@ public:
         this->instrs.emplace_back(std::format("S {} {}\n", idx_a, idx_b));
         return true;
     }
-    //should highlight the looked at element
-    int At(size_t idx) {
-        this->instrs.emplace_back(std::format("H {}\n", idx));
-        return this->vec.at(idx);
+    //1 if a > b, -1 if a < b, 0 if a == b
+    int Cmp (size_t idx_a, size_t idx_b) {
+        this->instrs.emplace_back(std::format("C {} {}\n", idx_a, idx_b));
+        return vec.at(idx_a) - vec.at(idx_b);
     }
     void PrintInstructions() {
         Utils::print_vec(this->instrs);
@@ -152,7 +141,6 @@ public:
     } 
 };
 
-//for Bar Chart
 class Bar {
     float x, y, w, h;
     sf::RectangleShape shape;
@@ -167,9 +155,9 @@ public:
     }
     Bar& operator=(const Bar& other) {
         if (this != &other) {
-            this->x = other.x;
-            this->y = other.y;
-            this->shape.setPosition({this->x, this->y});
+            this->h = other.h;
+            this->w = other.w;
+            this->shape.setSize({this->w, this->h});
         }
         return *this;
     }
@@ -187,6 +175,31 @@ public:
     }
 };
 
+class IdxBag {
+private:
+    std::array<size_t, 10> arr{};
+    size_t current_idx = 0;
+public:
+    void AddIdx(size_t idx) {
+        arr[current_idx] = idx;
+        if (current_idx < 9) {
+            current_idx++;
+        } 
+    }
+    void Clear() {
+        current_idx = 0;
+    }
+    size_t Size() {
+        return current_idx+1;
+    }
+    size_t At(size_t idx) {
+        if (idx >= arr.size() || idx < 0) {
+            return 0;
+        }
+        return arr[idx];
+    }
+};
+
 class BarChart {
     std::vector<Bar> bars;
     sf::RenderTarget& target;
@@ -194,7 +207,10 @@ class BarChart {
     std::vector<std::string> instructions;
     size_t instr_ptr = 0;
 
-    std::vector<size_t> highIdxs;
+    float delta_accum = 0;
+    float delta_mark = 1;
+    int to_move = 0;
+    IdxBag idx_bag;
 
     float map_height_val(float v, float vec_min, float vec_max) {
         float min_h = 20;
@@ -211,7 +227,6 @@ class BarChart {
         float x = bar_space;
         float y = 20;
         float bar_width = bar_space * 0.8;
-        //float bar_break = bar_space * 0.2;
 
         float val_vec_max = float(*std::max_element(val_vec.begin(), val_vec.end()));
         float val_vec_min = float(*std::min_element(val_vec.begin(), val_vec.end()));
@@ -221,42 +236,40 @@ class BarChart {
             bars.emplace_back(Bar(target, x, y, bar_width, bar_height));
             x += bar_space;
         }
-        highIdxs.reserve(5);
     }
 
-    //H idx
+    //C idx_a idx_b
     //S idx_a idx_b
     void execute_instruction() {
         std::vector<std::string> cmd = Utils::split_string(this->instructions.at(this->instr_ptr), " ");
         //clean previous highlights
-        for (size_t i=0; i<this->highIdxs.size(); i++) {
-            bars.at(highIdxs.at(i)).Highlight(false);
+        for (size_t i=0; i<this->idx_bag.Size(); i++) {
+            bars.at(idx_bag.At(i)).Highlight(false);
         }
+        idx_bag.Clear();
 
-        if (cmd.at(0) == "H") {
-            size_t idx = Utils::convert_to_idx(cmd.at(1));
-            if (idx < 0) { //invalid instruction
-                return;
-            }
-            bars.at(idx).Highlight(true);
-            highIdxs.emplace_back(idx);
+        if (cmd.at(0) == "C") {
+            size_t idx_a = Utils::convert_to_idx(cmd.at(1));
+            bars.at(idx_a).Highlight(true);
+            idx_bag.AddIdx(idx_a);
+
+            size_t idx_b = Utils::convert_to_idx(cmd.at(2));
+            bars.at(idx_b).Highlight(true);
+            idx_bag.AddIdx(idx_b);
             std::cout<<this->instructions.at(this->instr_ptr);
         }
         else if (cmd.at(0) == "S") {
             size_t idx_a = Utils::convert_to_idx(cmd.at(1));
             bars.at(idx_a).Highlight(true);
-            highIdxs.emplace_back(idx_a);
+            idx_bag.AddIdx(idx_a);
 
             size_t idx_b = Utils::convert_to_idx(cmd.at(2));
             bars.at(idx_b).Highlight(true);
-            highIdxs.emplace_back(idx_b);
+            idx_bag.AddIdx(idx_b);
 
-            Bar tmp = bars.at(idx_a);
-            bars.at(idx_a) = bars.at(idx_b);
-            bars.at(idx_b) = tmp;
+            std::swap(bars.at(idx_a), bars.at(idx_b));
             std::cout<<this->instructions.at(this->instr_ptr);
         }
-
     }
 
 public:
@@ -282,69 +295,76 @@ public:
     void Move(int direction) {
         if ((this->instr_ptr + direction) >= instructions.size() || (this->instr_ptr + direction) < 0) return; //out of bounds
 
-        if (direction > 0) {
-            for (size_t i=0; i<=direction; i++) {
-                this->instr_ptr++;
-                execute_instruction();
-                std::this_thread::sleep_for(HOLD_TIME);
-            }
-            return;
-        }
-        if (direction < 0) {
-            for (size_t i=0; i<=abs(direction); i++) {
+        this->to_move += direction;
+
+        if (this->delta_accum >= this->delta_mark) {
+            delta_accum = 0;
+            if (to_move < 0) {
                 this->instr_ptr--;
                 execute_instruction();
-                std::this_thread::sleep_for(HOLD_TIME);
+                to_move++;
             }
-            return;
+            if (to_move > 0) {
+                this->instr_ptr++;
+                execute_instruction();
+                to_move--;
+            }
         }
-
     }
     void Draw() {
         for (const Bar& b : this->bars) {
             b.Draw();
         }
-        Move(1);
     }
-
-
+    void Update(float delta_time) {
+        this->delta_accum += delta_time;
+        Move(1);
+        this->Draw();
+    }
 };
 
-void bubbleSortOptimized(VisualVector& vec) {
+void BubbleSortOptimized(VisualVector& vec) {
     size_t n = vec.Size();
     if (n == 0) return;
 
     for (size_t i = 0; i < n - 1; ++i) {
         bool swapped = false;
         for (size_t j = 0; j < n - i - 1; ++j) {
-            if (vec.At(j) > vec.At(j + 1)) {
+            if (vec.Cmp(j, j+1) > 0) { 
                 vec.Swap(j, j + 1);
                 swapped = true;
             }
         }
-        if (!swapped) break; // Array is sorted early
+        if (!swapped) break;
     }
 }
 
 int main() {
-    std::vector<int> vec = {25,10,2,3,15,65,12};
+    std::vector<int> vec = {42, 15, 88, 7, 23, 91, 34, 62, 5, 50, 19, 76, 12, 99, 31, 54, 8, 67, 45, 20};
 
     // SFML 3.1 uses initializer lists for VideoMode dimensions
     auto window = sf::RenderWindow(sf::VideoMode({WIDTH, HEIGHT}), "Algorithm Visualizer by Petr Chyla");
     window.setFramerateLimit(60);
 
     VisualVector vvec = VisualVector(window, vec);
-    bubbleSortOptimized(vvec);
-    Utils::print_vec(vvec.GetVector());
-    vvec.PrintInstructions();
+    BubbleSortOptimized(vvec);
     vvec.StoreInstructions("instructions.txt");
-
-    std::cout<<"*************************************************"<<std::endl;
 
     BarChart bchart = BarChart(window, vvec);
 
+    //delta time setup
+    std::chrono::time_point<std::chrono::steady_clock> last, now;
+    std::chrono::duration<float> dt;
+    float delta_time;
+    using clock = std::chrono::steady_clock;
+
     while (window.isOpen()) {
-        // SFML 3 pollEvent uses optional return values or handle-based loops
+        //delta time calcs
+        now = clock::now();
+        dt = now - last;
+        last = now;
+        delta_time = dt.count();
+
         while (const auto event = window.pollEvent()) {
             if (event->is<sf::Event::Closed>()) {
                 window.close();
@@ -352,15 +372,9 @@ int main() {
         }
 
         window.clear(sf::Color::Black);
+        bchart.Update(delta_time);
         bchart.Draw();
         window.display();
     }
     return 0;
 }
-
-//The BarChart should only work with instructions, do not touch the vis vec vec itself (cause its already sorted)
-//give instr gen a pass over I guess
-//Only thing moving the instr_ptr should be the Move
-
-//The actual swapping, splitting into threads how???
-//one reading thread that freezes periodically and one rendering (main) thread that handles inputs and rendering at 60 fps, use mutexes to look the shared struct
