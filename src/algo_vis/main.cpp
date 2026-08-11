@@ -14,6 +14,11 @@
 #include <format>
 #include <ranges>
 #include <mutex>
+#include <concepts>
+
+#include "Utils.hpp"
+#include "LoggingAllocator.hpp"
+#include "ThreadSafeLogger.hpp"
 
 
 #define WIDTH 1280
@@ -23,8 +28,7 @@
 //#define OUTLINE_COLOR
 
 constexpr std::chrono::duration<double> HOLD_TIME{0.5};
-
-
+/*
 class ThreadSafeLogger {
 //most likely
     static inline std::vector<std::string> logs;
@@ -40,6 +44,7 @@ public:
         }
     }
 };
+*/
 
 //noexcept gurantees that no exceptions will be thrown by that method
 //gurantee can be broken, it which case the program will just end immidiately without handling the exception
@@ -48,6 +53,7 @@ public:
 //for constr because then std containers can just swap pointers instead of creating full copies during moving
 //for dealloc because std containers destructors are noexcept as cleanup ops are simply not allowed to fail ...
 //std::terminate is called on dual exceptions or on exception thrown in noexcept function, which terminates the program at once to prevent propagation of assumed corrupted internal state (like writing corrupted data on disk)
+/*
 template <typename T>
 class LoggingAllocator {
 public:
@@ -81,7 +87,8 @@ public:
     template < typename U>
     friend bool operator!=(const LoggingAllocator&, const LoggingAllocator<U>&) { return false; }
 };
-
+*/
+/*
 class Utils {
 public:
     static std::vector<std::string> split_string (const std::string& str, const std::string& delim) {
@@ -100,9 +107,11 @@ public:
         return -1; 
     }
 
-    static std::vector<int> convert_to_ints (const std::vector<std::string>& str_vec) {
-        std::vector<int> vec;
-        int n{};
+    template<typename T>
+    requires std::integral<T>
+    static std::vector<T> convert_to_integrals (const std::vector<std::string>& str_vec) {
+        std::vector<T> vec;
+        T n{};
 
         for (const std::string& w : str_vec) {
             //compiler structure unpacking
@@ -114,8 +123,8 @@ public:
         return vec;
     }
 
-    template<typename T>
-    static void print_vec(const std::vector<T>& vec) {
+    template<typename T, typename Alloc>
+    static void print_vec(const std::vector<T, Alloc>& vec) {
         std::cout<<"Printing vec:"<<std::endl;
         for (auto el : vec) {
             std::cout<<el<<"\n";
@@ -147,16 +156,18 @@ public:
         }
     }
 };
-
-template <typename Alloc>
+*/
+/*
+template <typename T, typename Alloc>
+requires std::integral<T>
 class VisualVector {
 public:
-    std::vector<int, Alloc> vec;
+    std::vector<T, Alloc> vec;
     sf::RenderTarget& target;
     std::vector<std::string> instrs;
 
 public:
-    VisualVector(sf::RenderTarget& target, const std::vector<int, Alloc>& vec)
+    VisualVector(sf::RenderTarget& target, const std::vector<T, Alloc>& vec)
         : vec(vec), target(target) {
         std::string vec_str;
 
@@ -167,6 +178,9 @@ public:
 
         this->instrs = {vec_str};
 
+    }
+    std::vector<T, Alloc> GetDataVec () const {
+        return this->vec;
     }
     std::vector<std::string> GetInstructions() const {
         return this->instrs;
@@ -185,7 +199,7 @@ public:
         this->instrs.emplace_back(std::format("S {} {}\n", idx_a, idx_b));
         return true;
     }
-    //1 if a > b, -1 if a < b, 0 if a == b
+    // 0 > if a > b, 0 < if a < b, 0 if a == b
     int Cmp (size_t idx_a, size_t idx_b) {
         this->instrs.emplace_back(std::format("C {} {}\n", idx_a, idx_b));
         return vec.at(idx_a) - vec.at(idx_b);
@@ -200,7 +214,8 @@ public:
         Utils::store_files_lines(this->instrs, fp);
     } 
 };
-
+*/
+/*
 class Bar {
     float x, y, w, h;
     sf::RectangleShape shape;
@@ -234,7 +249,8 @@ public:
         }
     }
 };
-
+*/
+/*
 class IdxBag {
 private:
     std::array<size_t, 10> arr{};
@@ -259,7 +275,10 @@ public:
         return arr[idx];
     }
 };
-
+*/
+//To Be Split
+template <typename T>
+requires std::integral<T>
 class BarChart {
     std::vector<Bar> bars;
     sf::RenderTarget& target;
@@ -272,7 +291,7 @@ class BarChart {
     int to_move = 0;
     IdxBag idx_bag;
 
-    float map_height_val(float v, float vec_min, float vec_max) {
+    float map_height_val(T v, float vec_min, float vec_max) {
         float min_h = 20;
         float max_h = HEIGHT - 40;
         if (vec_min == vec_max) {
@@ -281,7 +300,8 @@ class BarChart {
         float norm = (v - vec_min) / (vec_max - vec_min);
         return min_h + norm * (max_h - min_h);
     }
-    void generate_bars(std::vector<int> val_vec) 
+
+    void generate_bars(std::vector<T> val_vec) 
     {
         float bar_space = float(WIDTH) / (val_vec.size() + 2);
         float x = bar_space;
@@ -336,20 +356,14 @@ public:
     BarChart(sf::RenderTarget& target, std::vector<std::string> instructions)
     : target(target), instructions(instructions) {
         std::string vec_str = this->instructions.at(0);
-        auto val_vec = Utils::convert_to_ints(Utils::split_string(vec_str, ";"));
-        generate_bars(val_vec);
-    }
-    BarChart(sf::RenderTarget& target, const VisualVector& vvec)
-        : target(target), instructions(vvec.GetInstructions()){
-        std::string vec_str = this->instructions.at(0);
-        auto val_vec = Utils::convert_to_ints(Utils::split_string(vec_str, ";"));
+        auto val_vec = Utils::convert_to_integrals<T>(Utils::split_string(vec_str, ";"));
         generate_bars(val_vec);
     }
     BarChart(sf::RenderTarget& target, const std::string& file_path)
         : target(target) {
         this->instructions = Utils::load_file_lines(file_path);
         std::string vec_str = this->instructions.at(0);
-        auto val_vec = Utils::convert_to_ints(Utils::split_string(vec_str, ";"));
+        auto val_vec = Utils::convert_to_integrals<T>(Utils::split_string(vec_str, ";"));
         generate_bars(val_vec);
     }
     void Move(int direction) {
@@ -383,7 +397,10 @@ public:
     }
 };
 
-void BubbleSortOptimized(VisualVector& vec) {
+template <typename T>
+requires std::integral<T>
+
+void BubbleSortOptimized(VisualVector<T, LoggingAllocator<T>>& vec) {
     size_t n = vec.Size();
     if (n == 0) return;
 
@@ -408,9 +425,10 @@ int main() {
 
     VisualVector vvec = VisualVector(window, vec);
     BubbleSortOptimized(vvec);
+    Utils::print_vec<int>(vvec.GetDataVec());
     vvec.StoreInstructions("instructions.txt");
 
-    BarChart bchart = BarChart(window, vvec);
+    BarChart bchart = BarChart<int>(window, vvec.GetInstructions());
 
     //delta time setup
     std::chrono::time_point<std::chrono::steady_clock> last, now;
@@ -436,6 +454,7 @@ int main() {
         bchart.Draw();
         window.display();
     }
+    ThreadSafeLogger::print_log();
     return 0;
 }
 
